@@ -74,10 +74,8 @@
       if (res.ratelimited) {
         warnLog("Rate limited — sleeping 10s");
         await sleep(RL_SLEEP);
-        try {
-          const retry = await api("DELETE", `/channels/${channelId}/messages/${messageId}`);
-          if (retry.ok) return true;
-        } catch {}
+        const retry = await api("DELETE", `/channels/${channelId}/messages/${messageId}`);
+        if (retry.ok) return true;
       }
     } catch {}
     return false;
@@ -95,12 +93,9 @@
     return (await r.json()).id;
   }
 
-  function snowflakeBefore(id) {
-    return (BigInt(id) - 1n).toString();
-  }
-
   async function driveSearch(body) {
     banner("Message cleanup running");
+
     while (running) {
       body.tabs.messages.limit = LIMIT;
       body.tabs.messages.offset = offset;
@@ -116,17 +111,16 @@
       }
 
       let deleted = 0;
-      let oldestId = null;
 
       for (const msg of messages) {
         if (!running) return;
-        oldestId = msg.id;
 
         if (msg.author.id !== userId) {
           skipped.push(msg);
           continue;
         }
-        if (msg.type === 3 || ![0,19,20,21,23].includes(msg.type)) {
+
+        if (msg.type === 3 || ![0, 19, 20, 21, 23].includes(msg.type)) {
           skipped.push(msg);
           continue;
         }
@@ -148,12 +142,19 @@
         offset
       });
 
-      if (messages.length < LIMIT) {
-        if (!oldestId) break;
-        cursor = { type: "message", message_id: snowflakeBefore(oldestId) };
+      if (deleted === 0 && data.cursor) {
+        cursor = data.cursor;
+        offset = 0;
+        continue;
+      }
+
+      if (messages.length === LIMIT) {
+        offset += LIMIT;
+      } else if (data.cursor) {
+        cursor = data.cursor;
         offset = 0;
       } else {
-        offset += LIMIT;
+        break;
       }
     }
 
@@ -165,10 +166,12 @@
   async function captureOnce(_, rawBody) {
     if (running) return;
     running = true;
-    hooked = false;
 
     if (!token) token = prompt("Paste your Discord token here:");
+    if (!token) return;
     if (!userId) userId = await getUserId();
+
+    hooked = false;
 
     const body = JSON.parse(rawBody);
     offset = body.tabs.messages.offset || 0;
