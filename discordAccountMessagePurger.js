@@ -5,6 +5,7 @@
   const API = "https://discord.com/api/v9";
   const LIMIT = 25;
   const RL_SLEEP = 10000;
+  const OFFSET_CAP = 9000;
 
   let token;
   let userId;
@@ -15,6 +16,7 @@
   let offset = 0;
   let cursor = null;
   let deleteLock = Promise.resolve();
+  let lastCursor = null;
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -74,8 +76,10 @@
       if (res.ratelimited) {
         warnLog("Rate limited — sleeping 10s");
         await sleep(RL_SLEEP);
-        const retry = await api("DELETE", `/channels/${channelId}/messages/${messageId}`);
-        if (retry.ok) return true;
+        try {
+          const retry = await api("DELETE", `/channels/${channelId}/messages/${messageId}`);
+          if (retry.ok) return true;
+        } catch {}
       }
     } catch {}
     return false;
@@ -97,6 +101,11 @@
     banner("Message cleanup running");
 
     while (running) {
+      if (offset >= OFFSET_CAP && lastCursor) {
+        cursor = lastCursor;
+        offset = 0;
+      }
+
       body.tabs.messages.limit = LIMIT;
       body.tabs.messages.offset = offset;
       body.cursor = cursor;
@@ -119,7 +128,6 @@
           skipped.push(msg);
           continue;
         }
-
         if (msg.type === 3 || ![0, 19, 20, 21, 23].includes(msg.type)) {
           skipped.push(msg);
           continue;
@@ -142,19 +150,12 @@
         offset
       });
 
-      if (deleted === 0 && data.cursor) {
-        cursor = data.cursor;
-        offset = 0;
-        continue;
-      }
-
-      if (messages.length === LIMIT) {
-        offset += LIMIT;
-      } else if (data.cursor) {
+      if (data.cursor) {
+        lastCursor = data.cursor;
         cursor = data.cursor;
         offset = 0;
       } else {
-        break;
+        offset += messages.length;
       }
     }
 
@@ -176,6 +177,7 @@
     const body = JSON.parse(rawBody);
     offset = body.tabs.messages.offset || 0;
     cursor = null;
+    lastCursor = null;
 
     infoLog("Search captured — starting cleanup..");
     await driveSearch(body);
