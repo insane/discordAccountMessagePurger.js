@@ -5,7 +5,7 @@
   const API = "https://discord.com/api/v9";
   const LIMIT = 25;
   const RL_SLEEP = 10000;
-  const OFFSET_CAP = 9000;
+  const OFFSET_CAP = 9900;
 
   let token;
   let userId;
@@ -16,7 +16,6 @@
   let offset = 0;
   let cursor = null;
   let deleteLock = Promise.resolve();
-  let lastCursor = null;
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -76,10 +75,8 @@
       if (res.ratelimited) {
         warnLog("Rate limited — sleeping 10s");
         await sleep(RL_SLEEP);
-        try {
-          const retry = await api("DELETE", `/channels/${channelId}/messages/${messageId}`);
-          if (retry.ok) return true;
-        } catch {}
+        const retry = await api("DELETE", `/channels/${channelId}/messages/${messageId}`);
+        if (retry.ok) return true;
       }
     } catch {}
     return false;
@@ -101,16 +98,20 @@
     banner("Message cleanup running");
 
     while (running) {
-      if (offset >= OFFSET_CAP && lastCursor) {
-        cursor = lastCursor;
+      if (offset >= OFFSET_CAP) {
         offset = 0;
       }
 
       body.tabs.messages.limit = LIMIT;
       body.tabs.messages.offset = offset;
-      body.cursor = cursor;
+      body.cursor = null;
 
       const res = await api("POST", "/users/@me/messages/search/tabs", body);
+      if (res.ratelimited) {
+        warnLog("Search rate limited — sleeping 30s");
+        await sleep(30000);
+        continue;
+      }
       if (!res.ok || !res.data) break;
 
       const data = res.data;
@@ -128,7 +129,7 @@
           skipped.push(msg);
           continue;
         }
-        if (msg.type === 3 || ![0, 19, 20, 21, 23].includes(msg.type)) {
+        if (msg.type === 3 || ![0,19,20,21,23].includes(msg.type)) {
           skipped.push(msg);
           continue;
         }
@@ -150,13 +151,7 @@
         offset
       });
 
-      if (data.cursor) {
-        lastCursor = data.cursor;
-        cursor = data.cursor;
-        offset = 0;
-      } else {
-        offset += messages.length;
-      }
+      offset += LIMIT;
     }
 
     running = false;
@@ -176,8 +171,6 @@
 
     const body = JSON.parse(rawBody);
     offset = body.tabs.messages.offset || 0;
-    cursor = null;
-    lastCursor = null;
 
     infoLog("Search captured — starting cleanup..");
     await driveSearch(body);
