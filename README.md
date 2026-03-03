@@ -29,7 +29,7 @@ Deletes **your own messages only** and works globally across **servers, DMs, and
 
 - **Desktop browser** (Chrome / Chromium recommended)
 - **Discord Web**
-- **Vencord Web extension**
+- **Vencord Web extension** (NOT NEEDED ANYMORE)
 - A Discord **user token**
 
 ---
@@ -54,7 +54,7 @@ Log into your account.
 
 ---
 
-### 3. Enable Experiments
+### 3. Enable Experiments (NOT NEEDED ANYMORE)
 1. Open **Discord Settings**
 2. Go to **Plugins**
 3. Enable **Experiments**
@@ -64,7 +64,7 @@ Log into your account.
 
 ---
 
-### 4. Enable xDM Search (Required)
+### 4. Enable xDM Search (NOT NEEDED ANYMORE)
 1. Go to **Settings → Experiments**
 2. Find **Search Desktop XDM**
 3. Set it to:
